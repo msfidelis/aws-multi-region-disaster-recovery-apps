@@ -1,0 +1,5 @@
+{
+    "Application": "rest-api-demo",
+    "Env": "prod",
+    "Version": "v1"
+}
