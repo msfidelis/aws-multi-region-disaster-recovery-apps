@@ -20,9 +20,10 @@ type Request struct {
 }
 
 type Response struct {
-	Id      string  `json:"id" binding:"id"`
-	Product string  `json:"product" binding:"required"`
-	Amount  float64 `json:"amount" binding:"required"`
+	Id        string  `json:"id" binding:"id"`
+	Product   string  `json:"product" binding:"required"`
+	Amount    float64 `json:"amount" binding:"required"`
+	Processed bool    `json:"processed" binding:"required"`
 }
 
 // Sales godoc
@@ -39,7 +40,7 @@ func Create(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		log.Error().
-			Str("Service", "create").
+			Str("Action", "create").
 			Str("Error", err.Error()).
 			Msg("Error to Bind JSON")
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -51,7 +52,7 @@ func Create(c *gin.Context) {
 	})
 	if err != nil {
 		log.Error().
-			Str("Service", "create").
+			Str("Action", "create").
 			Str("Error", err.Error()).
 			Msg("Error to create DynamoDB Session")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -65,6 +66,7 @@ func Create(c *gin.Context) {
 		Product:   request.Product,
 		Amount:    request.Amount,
 		Timestamp: time.Now().Unix(),
+		Processed: false,
 	}
 
 	dao := sales_model.NewModelDAO(svc)
@@ -72,7 +74,7 @@ func Create(c *gin.Context) {
 	err = dao.Create(saleModel)
 	if err != nil {
 		log.Error().
-			Str("Service", "create").
+			Str("Action", "create").
 			Str("Error", err.Error()).
 			Msg("Error to save item to dynamoDB")
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -82,9 +84,10 @@ func Create(c *gin.Context) {
 	response.Id = saleModel.ID
 	response.Product = saleModel.Product
 	response.Amount = saleModel.Amount
+	response.Processed = saleModel.Processed
 
 	log.Info().
-		Str("Service", "create").
+		Str("Action", "create").
 		Str("Id", response.Id).
 		Str("Product", response.Product).
 		Float64("Amount", response.Amount).
