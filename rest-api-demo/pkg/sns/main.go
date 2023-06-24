@@ -1,7 +1,6 @@
 package sns
 
 import (
-	"log"
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -16,7 +15,7 @@ func Publish(message string, topic_arn string) (*sns.PublishOutput, error) {
 	})
 
 	if err != nil {
-		log.Fatal("Erro ao criar a sessão da AWS:", err)
+		return nil, err
 	}
 
 	svc := sns.New(sess)
