@@ -11,7 +11,7 @@ import (
 func Publish(message string, topic_arn string) (*sns.PublishOutput, error) {
 
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(os.Getenv("AWS_REGION")), // Substitua pela região desejada
+		Region: aws.String(os.Getenv("AWS_REGION")),
 	})
 
 	if err != nil {
