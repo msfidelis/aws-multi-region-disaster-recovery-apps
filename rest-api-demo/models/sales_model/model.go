@@ -1,10 +1,9 @@
 package sales_model
 
 type Model struct {
-	ID        string  `dynamodbav:"id"`
-	Product   string  `dynamodbav:"product"`
-	Amount    float64 `dynamodbav:"amount"`
-	Processed bool    `dynamodbav:"processed"`
-	Timestamp int64   `dynamodbav:"timestamp"`
-	// Outros campos
+	ID        string  `dynamodbav:"id" json:"id"`
+	Product   string  `dynamodbav:"product" json:"product"`
+	Amount    float64 `dynamodbav:"amount" json:"amount"`
+	Processed bool    `dynamodbav:"processed" json:"processed"`
+	Timestamp int64   `dynamodbav:"timestamp" json:"timestamp"`
 }

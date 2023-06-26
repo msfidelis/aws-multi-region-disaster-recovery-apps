@@ -1,6 +1,7 @@
 package sales
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"time"
@@ -12,6 +13,8 @@ import (
 	guuid "github.com/google/uuid"
 	"github.com/msfidelis/rest-api-demo/models/sales_model"
 	"github.com/msfidelis/rest-api-demo/pkg/log"
+	"github.com/msfidelis/rest-api-demo/pkg/parameter_store"
+	"github.com/msfidelis/rest-api-demo/pkg/sns"
 )
 
 type Request struct {
@@ -38,9 +41,28 @@ func Create(c *gin.Context) {
 
 	log := log.Instance()
 
+	sns_processing_topic := os.Getenv("SNS_SALES_PROCESSING_TOPIC")
+	ssm_site_state_parameter := os.Getenv("SSM_PARAMETER_STORE_STATE")
+	aws_region := os.Getenv("AWS_REGION")
+
+	site_state, err := parameter_store.GetParamValue(ssm_site_state_parameter, 30)
+
+	if err != nil {
+		log.Error().
+			Str("Action", "create").
+			Str("Region", aws_region).
+			Str("State", site_state).
+			Str("Error", err.Error()).
+			Msg("Error to recover site state from parameter store")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := c.ShouldBindJSON(&request); err != nil {
 		log.Error().
 			Str("Action", "create").
+			Str("Region", aws_region).
+			Str("State", site_state).
 			Str("Error", err.Error()).
 			Msg("Error to Bind JSON")
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -48,11 +70,13 @@ func Create(c *gin.Context) {
 	}
 
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(os.Getenv("AWS_REGION")),
+		Region: aws.String(aws_region),
 	})
 	if err != nil {
 		log.Error().
 			Str("Action", "create").
+			Str("Region", aws_region).
+			Str("State", site_state).
 			Str("Error", err.Error()).
 			Msg("Error to create DynamoDB Session")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -75,6 +99,8 @@ func Create(c *gin.Context) {
 	if err != nil {
 		log.Error().
 			Str("Action", "create").
+			Str("Region", aws_region).
+			Str("State", site_state).
 			Str("Error", err.Error()).
 			Msg("Error to save item to dynamoDB")
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -88,10 +114,48 @@ func Create(c *gin.Context) {
 
 	log.Info().
 		Str("Action", "create").
+		Str("Region", aws_region).
+		Str("State", site_state).
 		Str("Id", response.Id).
 		Str("Product", response.Product).
 		Float64("Amount", response.Amount).
-		Msg("Sale registered")
+		Msg("Sale persisted on DynamoDB")
+
+	json_string, err := json.Marshal(saleModel)
+	if err != nil {
+		log.Error().
+			Str("Action", "create").
+			Str("Region", aws_region).
+			Str("State", site_state).
+			Str("Error", err.Error()).
+			Msg("Error to marshall model on JSON String")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	_, err = sns.Publish(string(json_string), sns_processing_topic)
+
+	if err != nil {
+		log.Error().
+			Str("Action", "create").
+			Str("Region", aws_region).
+			Str("State", site_state).
+			Str("Error", err.Error()).
+			Str("SNS_Topic", sns_processing_topic).
+			Msg("Failed to publish message on SALES_PROCESSING topic")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.Info().
+		Str("Action", "create").
+		Str("Region", aws_region).
+		Str("State", site_state).
+		Str("SNS_Topic", sns_processing_topic).
+		Str("Id", response.Id).
+		Str("Product", response.Product).
+		Float64("Amount", response.Amount).
+		Msg("Sale processing event published on SNS Topic")
 
 	c.JSON(http.StatusCreated, response)
 }

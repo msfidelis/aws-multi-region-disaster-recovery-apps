@@ -9,6 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/gin-gonic/gin"
 	"github.com/msfidelis/rest-api-demo/models/sales_model"
+	"github.com/msfidelis/rest-api-demo/pkg/log"
+	"github.com/msfidelis/rest-api-demo/pkg/parameter_store"
 )
 
 // Sales godoc
@@ -21,12 +23,36 @@ func GetByID(c *gin.Context) {
 
 	var response Response
 
+	log := log.Instance()
+
+	ssm_site_state_parameter := os.Getenv("SSM_PARAMETER_STORE_STATE")
+	aws_region := os.Getenv("AWS_REGION")
+
+	site_state, err := parameter_store.GetParamValue(ssm_site_state_parameter, 30)
+
+	if err != nil {
+		log.Error().
+			Str("Action", "read").
+			Str("Region", aws_region).
+			Str("State", site_state).
+			Str("Error", err.Error()).
+			Msg("Error to recover site state from parameter store")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	id := c.Param("id")
 
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(os.Getenv("AWS_REGION")),
+		Region: aws.String(os.Getenv(aws_region)),
 	})
 	if err != nil {
+		log.Error().
+			Str("Action", "read").
+			Str("Region", aws_region).
+			Str("State", site_state).
+			Str("Error", err.Error()).
+			Msg("Error to read DynamoDB Session")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -36,11 +62,24 @@ func GetByID(c *gin.Context) {
 
 	sale, err := dao.GetByID(id)
 	if err != nil {
+		log.Error().
+			Str("Action", "read").
+			Str("Region", aws_region).
+			Str("State", site_state).
+			Str("Error", err.Error()).
+			Msg("Error to execute DynamoDB Query")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	if sale == nil {
+		log.Warn().
+			Str("Action", "read").
+			Str("Region", aws_region).
+			Str("State", site_state).
+			Str("Id", id).
+			Str("Error", err.Error()).
+			Msg("Item not found")
 		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
 		return
 	}
@@ -48,11 +87,6 @@ func GetByID(c *gin.Context) {
 	response.Id = sale.ID
 	response.Amount = sale.Amount
 	response.Product = sale.Product
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
 
 	c.JSON(http.StatusOK, response)
 

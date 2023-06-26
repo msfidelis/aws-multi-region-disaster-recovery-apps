@@ -14,6 +14,8 @@ services:
       - CHAOS_MONKEY_MEMORY=false
       - AWS_REGION=us-east-1
       - DYNAMO_SALES_TABLE=sales
+      - SNS_SALES_PROCESSING_TOPIC=arn:aws:sns:sa-east-1:181560427716:sales-processing-topic
+      - SSM_PARAMETER_STORE_STATE=/disaster-recovery/site/state
     ports:
         - 8080:8080
     volumes:
