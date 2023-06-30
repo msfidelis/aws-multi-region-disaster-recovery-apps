@@ -51,8 +51,6 @@ func GetParamValue(parameter string, cache_time int64) (string, error) {
 		WithDecryption: aws.Bool(false),
 	})
 
-	fmt.Println(*result.Parameter.Value)
-
 	if err != nil {
 		return "", err
 	}
