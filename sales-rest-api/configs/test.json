@@ -1,0 +1,5 @@
+{
+    "Application": "sales-rest-api",
+    "Env": "test",
+    "Version": "v1"
+}

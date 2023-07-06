@@ -1,0 +1,12 @@
+FROM golang:1.19 AS builder
+
+# Install Air
+RUN go install github.com/cosmtrek/air@latest
+
+WORKDIR $GOPATH/src/sales-rest-api
+
+COPY . ./
+
+RUN pwd; ls -lha
+
+CMD ["air"]
