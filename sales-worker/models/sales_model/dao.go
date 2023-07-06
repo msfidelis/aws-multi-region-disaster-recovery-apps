@@ -90,7 +90,7 @@ func (dao *ModelDAO) UpdatedProcessedFlag(id string) error {
 		},
 	}
 
-	updateExpression := "SET " + "processed" + " = :value"
+	updateExpression := "SET " + "sale_processed" + " = :value"
 	expressionAttributeValues := map[string]*dynamodb.AttributeValue{
 		":value": {
 			BOOL: aws.Bool(true),

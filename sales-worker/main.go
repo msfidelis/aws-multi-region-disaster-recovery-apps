@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"sales-worker/pkg/log"
@@ -78,6 +80,12 @@ func main() {
 		go sales_update.ConsumeMessages(sqsClient, sqs_sales_queue, i)
 	}
 
+	http.HandleFunc("/healthcheck", healthcheckHandler)
+	port := ":8090"
+	fmt.Printf("Server running on %s\n", port)
+
+	go http.ListenAndServe(port, nil)
+
 	waitForExitSignal()
 }
 
@@ -88,4 +96,9 @@ func waitForExitSignal() {
 	<-signals
 	log.Info().Msg("Stopping consumer")
 	os.Exit(0)
+}
+
+func healthcheckHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, "OK")
 }
