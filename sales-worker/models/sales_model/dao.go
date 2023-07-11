@@ -9,15 +9,18 @@ import (
 )
 
 type ModelDAO struct {
-	tableName string
-	client    *dynamodb.DynamoDB
+	tableName        string
+	tableIdempotency string
+	client           *dynamodb.DynamoDB
 }
 
 func NewModelDAO(client *dynamodb.DynamoDB) *ModelDAO {
 	table_name := os.Getenv("DYNAMO_SALES_TABLE")
+	table_idempotency := os.Getenv("DYNAMO_SALES_IDEMPOTENCY_TABLE")
 	return &ModelDAO{
-		tableName: table_name,
-		client:    client,
+		tableName:        table_name,
+		tableIdempotency: table_idempotency,
+		client:           client,
 	}
 }
 
@@ -106,4 +109,43 @@ func (dao *ModelDAO) UpdatedProcessedFlag(id string) error {
 
 	_, err := dao.client.UpdateItem(input)
 	return err
+}
+
+func (dao *ModelDAO) SetIdempotency(id string) error {
+	item := map[string]*dynamodb.AttributeValue{
+		"id": {
+			S: aws.String(id),
+		},
+	}
+
+	input := &dynamodb.PutItemInput{
+		Item:      item,
+		TableName: aws.String(dao.tableIdempotency),
+	}
+
+	_, err := dao.client.PutItem(input)
+	return err
+}
+
+func (dao *ModelDAO) CheckIdempotency(id string) (bool, error) {
+	input := &dynamodb.QueryInput{
+		TableName:              &dao.tableIdempotency,
+		KeyConditionExpression: aws.String("id = :value"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":value": {
+				S: aws.String(id),
+			},
+		},
+	}
+
+	result, err := dao.client.Query(input)
+	if err != nil {
+		return false, err
+	}
+
+	if len(result.Items) > 0 {
+		return true, nil
+	}
+
+	return false, nil
 }

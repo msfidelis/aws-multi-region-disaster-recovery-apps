@@ -3,11 +3,14 @@ package sales_update
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"time"
 
 	"sales-worker/models/sales_model"
 	"sales-worker/pkg/log"
 	"sales-worker/pkg/parameter_store"
+	"sales-worker/pkg/s3"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -135,18 +138,50 @@ func processSale(id string, message string, state string, thread int) error {
 		return nil
 	}
 
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String(aws_region),
+	})
+	if err != nil {
+		return err
+	}
+
+	svc := dynamodb.New(sess)
+	dao := sales_model.NewModelDAO(svc)
+
 	log.Info().
 		Str("Region", aws_region).
 		Str("State", state).
 		Int("Thread", thread).
-		Str("MessageId", id).
+		Str("Sale", id).
 		Msg("Processing Message; Site is Active")
 
 	sale := sales_model.Model{}
 
-	err := json.Unmarshal([]byte(message), &sale)
+	err = json.Unmarshal([]byte(message), &sale)
 	if err != nil {
 		return err
+	}
+
+	log.Info().
+		Str("Region", aws_region).
+		Str("State", state).
+		Int("Thread", thread).
+		Str("Sale", sale.ID).
+		Msg("Checking Idempotency")
+
+	idempotency, err := dao.CheckIdempotency(sale.ID)
+	if err != nil {
+		return err
+	}
+
+	if idempotency {
+		log.Info().
+			Str("Region", aws_region).
+			Str("State", state).
+			Int("Thread", thread).
+			Str("Sale", sale.ID).
+			Msg("Sale already processed, item found in idempotency table")
+		return nil
 	}
 
 	sale.Processed = true
@@ -154,6 +189,23 @@ func processSale(id string, message string, state string, thread int) error {
 	if err != nil {
 		return err
 	}
+
+	err = saveSaleOnS3(sale.ID, message, state, thread)
+	if err != nil {
+		return err
+	}
+
+	err = dao.SetIdempotency(sale.ID)
+	if err != nil {
+		return err
+	}
+
+	log.Info().
+		Str("Region", aws_region).
+		Str("State", state).
+		Int("Thread", thread).
+		Str("MessageId", id).
+		Msg("Sale saved on idempotency table")
 
 	return nil
 }
@@ -218,3 +270,62 @@ func updateOnDynamoDB(pre_sale sales_model.Model, state string, thread int) erro
 
 	return nil
 }
+
+func saveSaleOnS3(id string, message string, state string, thread int) error {
+	log := log.Instance()
+
+	now := time.Now()
+	formato := "20060102"
+	string_now := now.Format(formato)
+
+	aws_region := os.Getenv("AWS_REGION")
+	bucket := os.Getenv("S3_SALES_BUCKET")
+	key := fmt.Sprintf("sales/%s/%s.json", string_now, id)
+	log.Info().
+		Str("Region", aws_region).
+		Str("State", state).
+		Int("Thread", thread).
+		Str("Bucket", bucket).
+		Str("Sale", id).
+		Msg("Uploading Sale to S3")
+
+	bytes := []byte(message)
+	err := s3.Save(bytes, bucket, key)
+	if err != nil {
+		log.Error().
+			Str("Region", aws_region).
+			Str("State", state).
+			Int("Thread", thread).
+			Str("Bucket", bucket).
+			Str("Sale", id).
+			Str("Path", key).
+			Str("Error", err.Error()).
+			Msg("Error to save sale on S3")
+		return err
+	}
+
+	log.Info().
+		Str("Region", aws_region).
+		Str("State", state).
+		Int("Thread", thread).
+		Str("Bucket", bucket).
+		Str("Sale", id).
+		Str("Path", key).
+		Msg("Sale saved on S3")
+
+	return nil
+}
+
+// func checkIdempotency(id string, state string, thread int) bool {
+
+// }
+
+// func saveIdempotency(id string, state string, thread int) error {
+// log := log.Instance()
+// aws_region := os.Getenv("AWS_REGION")
+// idempotency_table := os.Getenv("DYNAMO_SALES_IDEMPOTENCY_TABLE")
+
+// sess := session.Must(session.NewSessionWithOptions(session.Options{
+// 	SharedConfigState: session.SharedConfigEnable,
+// }))
+// }

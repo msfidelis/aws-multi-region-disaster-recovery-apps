@@ -17,6 +17,7 @@ services:
       - DYNAMO_SALES_IDEMPOTENCY_TABLE=idempotency
       - SNS_SALES_PROCESSING_TOPIC=arn:aws:sns:sa-east-1:181560427716:sales-processing-topic
       - SSM_PARAMETER_STORE_STATE=/disaster-recovery/site/state
+      - S3_SALES_BUCKET=processed-sale-181560427716-sa-east-1
     ports:
         - 8080:8080
     volumes:
